@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>User Search</title>
+  <title>User Management & Search</title>
   <style>
     body {
       font-family: Arial;
@@ -28,66 +28,149 @@
 </head>
 <body>
 
-  <h2>Search Users</h2>
+  <h2>User Management</h2>
 
-  <input type="text" id="keyword" placeholder="Enter username or email">
+  <!-- Add User -->
+  <h3>Add New User</h3>
+  <form id="addForm">
+    <input type="text" id="addUsername" placeholder="Username" required>
+    <input type="email" id="addEmail" placeholder="Email" required>
+    <input type="password" id="addPassword" placeholder="Password" required>
+    <button type="submit">Add</button>
+  </form>
+
+  <!-- Search Users -->
+  <h3>Search Users</h3>
+  <input type="text" id="searchInput" placeholder="Enter username or email">
   <button onclick="searchUsers()">Search</button>
 
-  <table id="resultsTable" style="display: none;">
+  <!-- User Table -->
+  <h3>User List</h3>
+  <table id="resultsTable">
     <thead>
       <tr>
         <th>User ID</th>
         <th>Username</th>
         <th>Email</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody id="resultsBody"></tbody>
   </table>
 
+  <!-- Edit Form -->
+  <div id="editForm" style="display:none; margin-top:20px;">
+    <h3>Edit User</h3>
+    <input type="hidden" id="editUserId">
+    <input type="text" id="editUsername" placeholder="Username" required>
+    <input type="email" id="editEmail" placeholder="Email" required>
+    <button onclick="editUser()">Save</button>
+    <button type="button" onclick="document.getElementById('editForm').style.display='none'">Cancel</button>
+  </div>
+
   <p id="message"></p>
 
   <script>
     async function searchUsers() {
-      const keyword = document.getElementById('keyword').value.trim();
+      const keyword = document.getElementById('searchInput').value.trim();
       const message = document.getElementById('message');
-      const table = document.getElementById('resultsTable');
       const tbody = document.getElementById('resultsBody');
-
       if (!keyword) {
         message.textContent = 'Please enter a keyword.';
-        table.style.display = 'none';
         return;
       }
 
       try {
         const res = await fetch(`/api/admin/search?keyword=${encodeURIComponent(keyword)}`);
-        const data = await res.json();
-
-        if (res.ok) {
-          if (data.length === 0) {
-            message.textContent = 'No users found.';
-            table.style.display = 'none';
-          } else {
-            tbody.innerHTML = data.map(user => `
-              <tr>
-                <td>${user.user_id}</td>
-                <td>${user.username}</td>
-                <td>${user.email}</td>
-              </tr>
-            `).join('');
-            message.textContent = '';
-            table.style.display = '';
-          }
+        const users = await res.json();
+        if (res.ok && users.length > 0) {
+          tbody.innerHTML = users.map(u => `
+            <tr>
+              <td>${u.user_id}</td>
+              <td>${u.username}</td>
+              <td>${u.email}</td>
+              <td>
+                <button onclick="showEdit(${u.user_id}, '${u.username}', '${u.email}')">Edit</button>
+                <button onclick="deleteUser(${u.user_id})">Delete</button>
+              </td>
+            </tr>
+          `).join('');
         } else {
-          message.textContent = data.error || 'Search failed.';
-          table.style.display = 'none';
+          tbody.innerHTML = '';
+          message.textContent = 'No users found.';
         }
       } catch (err) {
         console.error('Search error:', err);
         message.textContent = 'Error occurred during search.';
-        table.style.display = 'none';
       }
     }
+
+    async function fetchUsers() {
+      const res = await fetch('/api/admin/users');
+      const users = await res.json();
+      const tbody = document.getElementById('resultsBody');
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>${u.user_id}</td>
+          <td>${u.username}</td>
+          <td>${u.email}</td>
+          <td>
+            <button onclick="showEdit(${u.user_id}, '${u.username}', '${u.email}')">Edit</button>
+            <button onclick="deleteUser(${u.user_id})">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('addForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const username = document.getElementById('addUsername').value;
+      const email = document.getElementById('addEmail').value;
+      const password = document.getElementById('addPassword').value;
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password })
+      });
+      alert(await res.text());
+      fetchUsers();
+      this.reset();
+    };
+
+    async function deleteUser(id) {
+      if (!confirm('Are you sure you want to delete this user?')) return;
+      const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      alert(await res.text());
+      fetchUsers();
+    }
+
+    function showEdit(id, username, email) {
+      document.getElementById('editUserId').value = id;
+      document.getElementById('editUsername').value = username;
+      document.getElementById('editEmail').value = email;
+      document.getElementById('editForm').style.display = '';
+    }
+
+    async function editUser() {
+      const id = document.getElementById('editUserId').value;
+      const username = document.getElementById('editUsername').value;
+      const email = document.getElementById('editEmail').value;
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email })
+      });
+      alert(await res.text());
+      document.getElementById('editForm').style.display = 'none';
+      fetchUsers();
+    }
+
+    window.editUser = editUser;
+    window.deleteUser = deleteUser;
+    window.showEdit = showEdit;
+
+    // Load user list initially
+    fetchUsers();
   </script>
 
 </body>
